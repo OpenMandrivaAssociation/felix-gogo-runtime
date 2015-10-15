@@ -7,7 +7,7 @@
 
 Name:           %{?scl_prefix}%{project}-gogo-runtime
 Version:        0.10.0
-Release:        10.0%{?dist}
+Release:        10.1
 Summary:        Community OSGi R4 Service Platform Implementation - Basic Commands
 License:        ASL 2.0
 URL:            http://felix.apache.org/site/apache-felix-gogo.html
@@ -29,7 +29,7 @@ BuildArch:      noarch
 
 BuildRequires:  maven-local
 BuildRequires:  mvn(junit:junit)
-BuildRequires:  mvn(org.apache.felix:gogo-parent)
+BuildRequires:  mvn(org.apache.felix:gogo-parent:pom:)
 BuildRequires:  mvn(org.easymock:easymock)
 BuildRequires:  mvn(org.mockito:mockito-all)
 BuildRequires:  mvn(org.osgi:org.osgi.compendium)
