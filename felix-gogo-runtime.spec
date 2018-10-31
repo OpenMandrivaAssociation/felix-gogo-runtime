@@ -7,7 +7,7 @@
 
 Name:           %{?scl_prefix}%{project}-gogo-runtime
 Version:        0.10.0
-Release:        10.1
+Release:        10.2
 Summary:        Community OSGi R4 Service Platform Implementation - Basic Commands
 License:        ASL 2.0
 URL:            http://felix.apache.org/site/apache-felix-gogo.html
