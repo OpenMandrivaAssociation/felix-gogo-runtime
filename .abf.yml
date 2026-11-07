@@ -1,2 +1,4 @@
 sources:
+  org.apache.felix.gogo.runtime-1.2.0-sources.jar: 017e47e5615e19091dd14e59d166581648113ee9
+removed_sources:
   org.apache.felix.gogo.runtime-0.10.0-project.tar.gz: a4dc7636979a4926cb1c815b127b1f5d780ef403

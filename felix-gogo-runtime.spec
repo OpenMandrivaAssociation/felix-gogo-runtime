@@ -1,113 +1,172 @@
-%{?_javapackages_macros:%_javapackages_macros}
-%global project   felix
-%global bundle    org.apache.felix.gogo.runtime
+Name:		felix-gogo-runtime
+Version:	1.2.0
+Release:	1
+Summary:	Apache Felix Gogo runtime
+Group:		Development/Java
+License:	ASL 2.0
+URL:		https://felix.apache.org/
+Source0:	https://repo1.maven.org/maven2/org/apache/felix/org.apache.felix.gogo.runtime/%{version}/org.apache.felix.gogo.runtime-%{version}-sources.jar
 
-%{!?scl:%global pkg_name %{name}}
-%{?scl:%scl_package %{project}-gogo-runtime}
-
-Name:           %{?scl_prefix}%{project}-gogo-runtime
-Version:        0.10.0
-Release:        10.2
-Summary:        Community OSGi R4 Service Platform Implementation - Basic Commands
-License:        ASL 2.0
-URL:            https://felix.apache.org/site/apache-felix-gogo.html
-
-Source0:        http://www.mirrorservice.org/sites/ftp.apache.org//felix/org.apache.felix.gogo.runtime-0.10.0-project.tar.gz 
-
-# Typecast an Event constructor call with java.util.Properties to 
-# java.util.Dictionary because the call to the constructor with Properties
-# was ambiguous.
-Patch1:         %{pkg_name}-dictionary.patch
-# Changed path to DEPENDENCIES, LICENSE and NOTICE from META-INF to root dir
-Patch2:         %{pkg_name}-bundle-resources.patch
-# Removed failing thread IO test
-Patch3:         %{pkg_name}-deleted-io-test.patch
-# Removed relativePath to parent pom
-Patch4:         %{pkg_name}-parent.patch
-
-BuildArch:      noarch
-
-BuildRequires:  maven-local
-BuildRequires:  mvn(junit:junit)
-BuildRequires:  mvn(org.apache.felix:gogo-parent:pom:)
-BuildRequires:  mvn(org.easymock:easymock)
-BuildRequires:  mvn(org.mockito:mockito-all)
-BuildRequires:  mvn(org.osgi:org.osgi.compendium)
-BuildRequires:  mvn(org.osgi:org.osgi.core)
-
-BuildRequires:  %{?scl_prefix}felix-gogo-parent
-%{?scl:BuildRequires:	  %{?scl_prefix}build}
-
-%{?scl:Requires: %scl_runtime}
+BuildArch:	noarch
+BuildRequires:	python
+# Literal, so the first rpmbuild -bs records them before sysjar is installed.
+BuildRequires:	maven
+BuildRequires:	java-current-devel
+BuildRequires:	mvn(org.osgi:osgi.core)
+BuildRequires:	mvn(org.osgi:org.osgi.service.event)
+BuildRequires:	mvn(org.osgi:osgi.annotation)
+BuildRequires:	mvn(org.osgi:org.osgi.namespace.service)
+BuildRequires:	mvn(org.osgi:org.osgi.service.component.annotations)
+BuildSystem:	maven
+BuildOption(install):	--file-name org.apache.felix.gogo.runtime --link %{name}
+Obsoletes:	%{name}-javadoc < %{version}-%{release}
 
 %description
-Apache Felix is a community effort to implement the OSGi R4 Service Platform
-and other interesting OSGi-related technologies under the Apache license. The
-OSGi specifications originally targeted embedded devices and home services
-gateways, but they are ideally suited for any project interested in the
-principles of modularity, component-orientation, and/or service-orientation.
-OSGi technology combines aspects of these aforementioned principles to define a
-dynamic service deployment framework that is amenable to remote management.
-
-%package javadoc
-Summary:        Javadoc for %{name}
-
-%description javadoc
-This package contains the API documentation for %{name}.
+Apache Felix Gogo runtime 1.2.0. This jar contains the command shell
+runtime, the command API, and the thread IO API. Framework types come
+from OSGi Core 6. Command execution events are delivered through Event
+Admin. Versioning, bundle, and component annotations are compile-time
+only. This build targets Java 8.
 
 %prep
-%setup -q -n %{bundle}-%{version}
-%patch1 -p1
-%patch2 -p1
-%patch3 -p1
-%patch4 -p1
+%setup -q -c -T
+# The builders' rpmuncompress passes a sources jar to tar.
+python - %{SOURCE0} <<'PY'
+import sys
+import zipfile
+zipfile.ZipFile(sys.argv[1]).extractall(".")
+PY
+cp -p META-INF/LICENSE LICENSE
+cp -p META-INF/NOTICE NOTICE
+rm -rf META-INF
+mkdir -p src/main/java
+mv org src/main/java/
+python - <<'PY'
+from pathlib import Path
 
-%mvn_file : %{project}/%{name}
+java_files = list(Path("src/main/java").rglob("*.java"))
+if len(java_files) != 46:
+    raise SystemExit("java files " + str(len(java_files)))
+for name in (
+    "src/main/java/org/apache/felix/gogo/runtime/CommandProcessorImpl.java",
+    "src/main/java/org/apache/felix/service/command/CommandProcessor.java",
+    "src/main/java/org/apache/felix/service/threadio/ThreadIO.java",
+    "src/main/java/org/apache/felix/gogo/runtime/activator/EventAdminListener.java",
+):
+    if not Path(name).is_file():
+        raise SystemExit("missing " + name)
+license_text = Path("LICENSE").read_text(encoding="utf-8")
+if "Apache License" not in license_text:
+    raise SystemExit("LICENSE is not the Apache license")
+if "Apache Felix Gogo Runtime" not in Path("NOTICE").read_text(encoding="utf-8"):
+    raise SystemExit("NOTICE mismatch")
+if list(Path(".").rglob("*.jar")) or list(Path(".").rglob("*.class")):
+    raise SystemExit("prebuilt binary remains")
+for pom in Path(".").rglob("pom.xml"):
+    pom.unlink()
 
-%build
-%{?scl:%scl_maven_opts}
-%mvn_build
+# gogo-parent 7 parents felix-parent 8, which cooker does not ship.
+Path("pom.xml").write_text("""<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.apache.felix</groupId>
+  <artifactId>org.apache.felix.gogo.runtime</artifactId>
+  <version>%{version}</version>
+  <packaging>jar</packaging>
+  <name>Apache Felix Gogo Runtime</name>
+  <description>Apache Felix Gogo command shell runtime.</description>
+  <url>https://felix.apache.org/</url>
+  <licenses>
+    <license>
+      <name>Apache-2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+    </license>
+  </licenses>
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>8</maven.compiler.release>
+  </properties>
+  <dependencies>
+    <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>osgi.core</artifactId>
+      <version>6.0.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>org.osgi.service.event</artifactId>
+      <version>1.4.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>osgi.annotation</artifactId>
+      <version>8.1.0</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>org.osgi.namespace.service</artifactId>
+      <version>1.0.0</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>org.osgi.service.component.annotations</artifactId>
+      <version>1.5.1</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.12.1</version>
+        <configuration>
+          <release>8</release>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>
+""", encoding="utf-8")
+pom = Path("pom.xml").read_text(encoding="utf-8")
+poms = sorted(str(path) for path in Path(".").rglob("pom.xml"))
+if poms != ["pom.xml"]:
+    raise SystemExit("poms " + str(poms))
+for needle in (
+    "<artifactId>org.apache.felix.gogo.runtime</artifactId>",
+    "<artifactId>osgi.core</artifactId>",
+    "<version>6.0.0</version>",
+    "<artifactId>org.osgi.service.event</artifactId>",
+    "<version>1.4.1</version>",
+    "<artifactId>osgi.annotation</artifactId>",
+    "<version>8.1.0</version>",
+    "<artifactId>org.osgi.namespace.service</artifactId>",
+    "<version>1.0.0</version>",
+    "<artifactId>org.osgi.service.component.annotations</artifactId>",
+    "<version>1.5.1</version>",
+    "<scope>provided</scope>",
+    "<version>%{version}</version>",
+    "<release>8</release>",
+    "<packaging>jar</packaging>",
+):
+    if needle not in pom:
+        raise SystemExit("pom missing " + needle)
+for needle in ("junit", "SNAPSHOT", "<source>", "<target>", "<parent>", "maven-bundle-plugin", "mockito"):
+    if needle in pom:
+        raise SystemExit("pom still contains " + needle)
+PY
 
-%install
-%mvn_install
-
+%build -a
+java --module-path target/org.apache.felix.gogo.runtime-%{version}.jar --describe-module org.apache.felix.gogo.runtime > module-describe.txt
+grep -q '^org.apache.felix.gogo.runtime' module-describe.txt || { cat module-describe.txt; exit 1; }
+grep -q ' automatic$' module-describe.txt || { cat module-describe.txt; exit 1; }
 
 %files -f .mfiles
-%dir %{_javadir}/%{project}
-%doc DEPENDENCIES LICENSE NOTICE 
-
-%files javadoc -f .mfiles-javadoc
 %doc LICENSE NOTICE
-
-%changelog
-* Tue Aug 06 2013 Michal Srb <msrb@redhat.com> - 0.10.0-10
-- Adapt to current guidelines
-- Install NOTICE file with javadoc subpackage
-
-* Sat Aug 03 2013 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.10.0-9
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_20_Mass_Rebuild
-
-* Fri Mar 15 2013 Krzysztof Daniel <kdaniel@redhat.com> 0.10.0-8
-- Initial SCLization.
-
-* Wed Feb 13 2013 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.10.0-7
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_19_Mass_Rebuild
-
-* Wed Feb 06 2013 Java SIG <java-devel@lists.fedoraproject.org> - 0.10.0-6
-- Update for https://fedoraproject.org/wiki/Fedora_19_Maven_Rebuild
-- Replace maven BuildRequires with maven-local
-
-* Thu Jul 19 2012 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.10.0-5
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_18_Mass_Rebuild
-
-* Wed Jan 18 2012 Tomas Radej <tradej@redhat.com> - 0.10.0-4
-- Changed jar path
-
-* Fri Jan 13 2012 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.10.0-3
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_17_Mass_Rebuild
-
-* Fri Dec 16 2011 Tomas Radej <tradej@redhat.com> - 0.10.0-2
-- Repackaged, minor changes
-
-* Mon Nov 07 2011 Tomas Radej <tradej@redhat.com> - 0.10.0-1
-- Initial packaging
